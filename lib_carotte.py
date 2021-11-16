@@ -1,0 +1,311 @@
+# SPDX-License-Identifier: CC0-1.0
+# carotte.py by Twal, hbens & more
+
+'''Carotte library internals'''
+
+import sys
+import typing
+
+class FakeColorama:
+    '''We define here empty variables for when the colorama package is not available'''
+    def __init__(self, depth: int = 0):
+        if depth < 1:
+            self.Fore = FakeColorama(depth+1)
+            self.Fore.YELLOW = '' # type: ignore
+            self.Style = FakeColorama(depth+1)
+            self.Style.RESET_ALL = '' # type: ignore
+
+try:
+    import colorama # type: ignore
+except ModuleNotFoundError:
+    print("Warning: Install module 'colorama' for colored errors", file=sys.stderr)
+    colorama = FakeColorama()
+
+_equation_counter = 0
+_input_list = []
+_equation_list = []
+_output_list = []
+_name_set = set()
+
+ALLOW_RIBBON_LOGIC_OPERATIONS = False
+
+def get_and_increment_equation_counter() -> int:
+    '''Return the current global equation counter, and increment it'''
+    global _equation_counter # pylint: disable=W0603
+    old_value = _equation_counter
+    _equation_counter += 1
+    return old_value
+
+class Variable(typing.List['Variable']):
+    '''The basis of carotte.py: netlist variables core'''
+    def __init__(self, name: str, bus_size: int, autogen_name: bool = True):
+        assert name not in _name_set
+        assert bus_size >= 0
+        _name_set.add(name)
+        self.name = name
+        self.autogen_name = autogen_name
+        self.bus_size = bus_size
+    def set_as_output(self, name: str = None) -> None:
+        '''Sets this variable as a netlist OUTPUT'''
+        if name is not None:
+            self.rename(name)
+        _output_list.append(self)
+    def get_full_name(self) -> str:
+        '''Returns the full name of this variable for the VARIABLE part of the netlist'''
+        if self.bus_size == 1:
+            return self.name
+        return f"{self.name}:{self.bus_size}"
+
+    def rename(self, new_name: str, autogen_name: bool = False) -> None:
+        '''Rename the variable; can fail'''
+        if self.name != new_name:
+            if new_name in _name_set:
+                raise ValueError(f"Rename failed: the variable name '{new_name}' is already used!")
+            _name_set.remove(self.name)
+            _name_set.add(new_name)
+            self.name = new_name
+            self.autogen_name = autogen_name
+
+    def try_rename(self, new_name: str, autogen_name: bool = False) -> bool:
+        '''Rename the variable if the new name is available and deemed better than the old one'''
+        if not self.autogen_name and autogen_name:
+            return False
+        try:
+            self.rename(new_name, autogen_name)
+        except ValueError:
+            return False
+        return True
+
+    def __assignpre__(self, lhs_name: str, rhs_name: str, rhs: typing.Any) -> typing.Any: # pylint: disable=R0201
+        '''Magic hook for better variables names'''
+        if False: # pylint: disable=W0125
+            print(f'{colorama.Fore.YELLOW}PRE: assigning {lhs_name} = {rhs_name}  ||| var: {rhs.get_full_name()}')
+        return rhs
+
+    def __assignpost__(self, lhs_name: str, rhs_name: str) -> None:
+        '''Magic hook for better variables names'''
+        if False: # pylint: disable=W0125
+            print(f'POST: assigning {lhs_name} = {rhs_name}  ||| var{self.autogen_name}: {self.get_full_name()}')
+        if self.autogen_name and (lhs_name is not None):
+            new_name = lhs_name
+            if new_name in _name_set:
+                new_name = '_' + lhs_name + '_' + str(get_and_increment_equation_counter())
+            self.try_rename(new_name)
+
+    def __and__(self, rhs: 'Variable') -> 'Variable':
+        return And(self, rhs)
+    def __or__(self, rhs: 'Variable') -> 'Variable':
+        return Or(self, rhs)
+    def __xor__(self, rhs: 'Variable') -> 'Variable':
+        return Xor(self, rhs)
+    def __invert__(self) -> 'Variable':
+        return Not(self)
+    def __getitem__(self, index: typing.Union[int, slice]) -> 'Variable': # type: ignore # this ignore is bad, FIXME
+        if isinstance(index, slice):
+            if (index.step is not None) and (index.step != 1):
+                raise TypeError(f"Slices must use a step of '1' (have {index.step})")
+            start = 0 if index.start is None else index.start
+            stop = self.bus_size if index.stop is None else index.stop
+            return Slice(start, stop, self)
+        if isinstance(index, int):
+            return Select(index, self)
+        raise TypeError(f"Invalid getitem, index: {index} is neither a slice or an integer")
+    def __add__(self, rhs: 'Variable') -> 'Variable': # type: ignore
+        return Concat(self, rhs)
+
+class Defer:
+    '''For handling loops in variable declarations'''
+    def __init__(self, bus_size: int, lazy_val: typing.Callable[[], Variable]):
+        self.val: typing.Optional[Variable] = None
+        self.lazy_val = lazy_val
+        self.bus_size = bus_size
+    def get_val(self) -> Variable:
+        '''Helper to resolve the variable value once the loop issue has been solved'''
+        if self.val is None:
+            self.val = self.lazy_val()
+            assert self.val.bus_size == self.bus_size
+        return self.val
+    def __getattr__(self, name: str) -> str:
+        if name != 'name':
+            raise AttributeError
+        return self.get_val().name
+
+VariableOrDefer = typing.Union[Variable, Defer]
+
+class Input(Variable):
+    '''A netlist variable of type INPUT'''
+    def __init__(self, bus_size: int, name: str = None):
+        autogen_name = False
+        if name is None:
+            name = "_input_" + str(get_and_increment_equation_counter())
+            autogen_name = True
+        if name in _name_set:
+            raise ValueError(f"The variable name '{name}' is already used!")
+        super().__init__(name, bus_size, autogen_name)
+        _input_list.append(self)
+    def __str__(self) -> str:
+        return self.name
+
+class EquationVariable(Variable):
+    '''A standard netlist variable'''
+    def __init__(self, bus_size: int):
+        while True:
+            name = "_l_" + str(get_and_increment_equation_counter())
+            if name not in _name_set:
+                break
+        super().__init__(name, bus_size)
+        _equation_list.append(self)
+
+class Unop(EquationVariable):
+    '''Netlist unary operations on variables'''
+    unop_name = ""
+    def __init__(self, x: VariableOrDefer):
+        if not ALLOW_RIBBON_LOGIC_OPERATIONS and x.bus_size != 1:
+            raise ValueError(f"Unops can only be performed on signals of bus size 1 (have {x.bus_size}). "
+                             + f"If your simulator handles ribbons logic operations, "
+                             + f"switch 'ALLOW_RIBBON_LOGIC_OPERATIONS' to 'True'")
+        super().__init__(x.bus_size)
+        self.x = x
+    def __str__(self) -> str:
+        if self.unop_name == "":
+            raise ValueError("MEH")
+        return f"{self.name} = {self.unop_name} {self.x.name}"
+
+class Not(Unop):
+    '''Netlist NOT'''
+    unop_name = "NOT"
+
+class Reg(Unop):
+    '''Netlist REG'''
+    unop_name = "REG"
+
+class Binop(EquationVariable):
+    '''Netlist binary operations on variables'''
+    binop_name = ""
+    def __init__(self, lhs: VariableOrDefer, rhsB: VariableOrDefer):
+        if lhs.bus_size != rhsB.bus_size:
+            raise ValueError("Operands have different bus sizes")
+        if not ALLOW_RIBBON_LOGIC_OPERATIONS and lhs.bus_size != 1:
+            raise ValueError(f"Binops can only be performed on signals of bus size 1 (have {lhs.bus_size}). "
+                             + f"If your simulator handles ribbons logic operations, "
+                             + f"switch 'ALLOW_RIBBON_LOGIC_OPERATIONS' to 'True'")
+        super().__init__(lhs.bus_size)
+        self.lhs = lhs
+        self.rhs = rhsB
+    def __str__(self) -> str:
+        if self.binop_name == "":
+            raise ValueError("MEH")
+        return f"{self.name} = {self.binop_name} {self.lhs.name} {self.rhs.name}"
+
+class And(Binop):
+    '''Netlist AND'''
+    binop_name = "AND"
+class Nand(Binop):
+    '''Netlist NAND'''
+    binop_name = "NAND"
+class Or(Binop):
+    '''Netlist OR'''
+    binop_name = "OR"
+class Xor(Binop):
+    '''Netlist XOR'''
+    binop_name = "XOR"
+
+class Mux(EquationVariable):
+    '''Netlist MUX'''
+    def __init__(self, choice: VariableOrDefer, a: VariableOrDefer, b: VariableOrDefer):
+        assert choice.bus_size == 1
+        assert a.bus_size == b.bus_size
+        self.choice = choice
+        self.a = a
+        self.b = b
+        super().__init__(a.bus_size)
+    def __str__(self) -> str:
+        return f"{self.name} = MUX {self.choice.name} {self.a.name} {self.b.name}"
+
+class ROM(EquationVariable):
+    '''Netlist ROM'''
+    def __init__(self, addr_size: int, word_size: int, read_addr: VariableOrDefer):
+        assert read_addr.bus_size == addr_size
+        self.addr_size = addr_size
+        self.word_size = word_size
+        self.read_addr = read_addr
+        super().__init__(word_size)
+    def __str__(self) -> str:
+        return f"{self.name} = ROM {self.addr_size} {self.word_size} {self.read_addr.name}"
+
+class RAM(EquationVariable):
+    '''Netlist RAM'''
+    def __init__(self, addr_size: int, word_size: int, read_addr: VariableOrDefer,
+                 write_enable: VariableOrDefer, write_addr: VariableOrDefer, write_data: VariableOrDefer):
+        assert read_addr.bus_size == addr_size
+        assert write_enable.bus_size == 1
+        assert write_addr.bus_size == addr_size
+        assert write_data.bus_size == word_size
+        self.addr_size = addr_size
+        self.word_size = word_size
+        self.read_addr = read_addr
+        self.write_enable = write_enable
+        self.write_addr = write_addr
+        self.write_data = write_data
+        super().__init__(word_size)
+    def __str__(self) -> str:
+        return (f"{self.name} = RAM {self.addr_size} {self.word_size} {self.read_addr.name} " +
+                f"{self.write_enable.name} {self.write_addr.name} {self.write_data.name}")
+
+class Concat(EquationVariable):
+    '''Netlist CONCAT'''
+    def __init__(self, lhs: VariableOrDefer, rhs: VariableOrDefer):
+        super().__init__(lhs.bus_size + rhs.bus_size)
+        self.lhs = lhs
+        self.rhs = rhs
+    def __str__(self) -> str:
+        return f"{self.name} = CONCAT {self.lhs.name} {self.rhs.name}"
+
+class Slice(EquationVariable):
+    '''Netlist SLICE'''
+    def __init__(self, i1: int, i2: int, x: VariableOrDefer):
+        if not 0 <= i1 < i2 <= x.bus_size:
+            raise IndexError(f"Slice must satisfy `0 <= i1 < i2 <= bus_size`, i.e. {0} <= {i1} < {i2} <= {x.bus_size}")
+        super().__init__(i2-i1)
+        self.i1 = i1
+        self.i2 = i2-1
+        self.x = x
+        if not x.autogen_name and '_slc_' not in x.name:
+            self.try_rename(('' if x.name.startswith('_') else '_') + x.name + '_slc_' +
+                            str(self.i1) + '_' + str(self.i2), True)
+    def __str__(self) -> str:
+        return f"{self.name} = SLICE {self.i1} {self.i2} {self.x.name}"
+
+class Select(EquationVariable):
+    '''Netlist SELECT'''
+    def __init__(self, i: int, x: VariableOrDefer):
+        if not 0 <= i < x.bus_size:
+            raise IndexError(f"Select must satisfy `0 <= i < bus_size`, i.e. {0} <= {i} < {x.bus_size}")
+        super().__init__(1)
+        self.i = i
+        self.x = x
+        if not x.autogen_name:
+            self.try_rename(('' if x.name.startswith('_') else '_') + x.name + '_sel_' + str(i), True)
+    def __str__(self) -> str:
+        return f"{self.name} = SELECT {self.i} {self.x.name}"
+
+def get_netlist() -> str:
+    '''Get the netlist in string form'''
+    netlist = (
+        ""
+        + "INPUT " + ", ".join(x.name for x in _input_list) + "\n"
+        + "OUTPUT " + ", ".join(x.name for x in _output_list) + "\n"
+        + "VAR " + ", ".join(x.get_full_name() for x in _input_list + _equation_list) + "\n" # type: ignore
+        + "IN" + "\n"
+        + "".join(str(x) + "\n" for x in _equation_list)
+    )
+    return netlist
+
+def reset() -> None:
+    '''Reset the netlist'''
+    global _equation_counter, _input_list, _equation_list, _output_list, _name_set # pylint: disable=W0603
+    _equation_counter = 0
+    _input_list = []
+    _equation_list = []
+    _output_list = []
+    _name_set = set()
