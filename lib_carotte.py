@@ -156,6 +156,17 @@ class EquationVariable(Variable):
         super().__init__(name, bus_size)
         _equation_list.append(self)
 
+class Constant(EquationVariable):
+    '''Netlist constant'''
+    def __init__(self, value: str):
+        for x in value:
+            if x not in "01tf":
+                raise ValueError(f"The character {x} of the constant {value} is not allowed (it should either be 0, 1, t or f)")
+        super().__init__(len(value))
+        self.value = value
+    def __str__(self) -> str:
+        return f"{self.name} = {self.value}"
+
 class Unop(EquationVariable):
     '''Netlist unary operations on variables'''
     unop_name = ""
