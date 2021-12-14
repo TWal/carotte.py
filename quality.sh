@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #set -euo pipefail
 
 export MYPY_FORCE_COLOR=1

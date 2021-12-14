@@ -4,6 +4,7 @@
 '''assignhooks patch'''
 
 import ast
+import typing
 
 import assignhooks # type: ignore
 

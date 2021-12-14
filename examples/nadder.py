@@ -4,8 +4,9 @@
 '''Simple n-adder example'''
 
 import functools
+import typing
 from lib_carotte import *
-from examples import fulladder # type: ignore
+from examples import fulladder
 
 def adder(a: Variable, b: Variable, c_in: Variable, i: int = None) -> typing.Tuple[Variable, Variable]:
     '''n-bit full-adder implementation'''
@@ -22,9 +23,13 @@ def adder(a: Variable, b: Variable, c_in: Variable, i: int = None) -> typing.Tup
 def adder_alt(a: Variable, b: Variable, c_in: Variable) -> typing.Tuple[Variable, Variable]:
     '''n-bit full-adder alternative implementation'''
     assert a.bus_size == b.bus_size
-    return functools.reduce(lambda x, y: (lambda r=fulladder.full_adder(y[0], y[1], x[1]): # type: ignore
-                                          (r[0] if x[0] is None else x[0]+r[0], r[1]) # type: ignore
-                                         )(), zip(a, b), (None, c_in))
+    TVV = typing.Tuple[Variable, Variable]
+    def inner(x: TVV, y: TVV) -> TVV:
+        r = fulladder.full_adder(y[0], y[1], x[1])
+        return r[0] if x[0] is None else x[0] + r[0], r[1]
+
+    c0: Variable = Constant('0')
+    return functools.reduce(inner, zip(a, b), (c0, c_in))
 
 def main() -> None:
     '''Entry point of this example'''

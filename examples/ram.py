@@ -4,6 +4,7 @@
 '''Simple RAM example'''
 
 import functools
+import typing
 from lib_carotte import *
 
 def or_n(a: Variable, b: Variable) -> Variable:
@@ -21,10 +22,10 @@ def or_n_alt(a: Variable, b: Variable) -> Variable:
 def or_n_alt2(a: Variable, b: Variable) -> Variable:
     '''n-bit logical OR alternative implementation'''
     assert a.bus_size == b.bus_size
-    c = None
+    c: typing.Optional[Variable] = None
     for x, y in zip(a, b):
-        c = x|y if c is None else c+(x|y) # type: ignore
-    assert c
+        c = x|y if c is None else c+(x|y)
+    assert c is not None, "c is none, unexpected"
     return c
 
 def main() -> None:

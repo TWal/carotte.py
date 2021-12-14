@@ -7,13 +7,17 @@ import sys
 import typing
 
 class FakeColorama:
+    Fore: 'FakeColorama'
+    Style: 'FakeColorama'
+    YELLOW: str
+    RESET_ALL: str
     '''We define here empty variables for when the colorama package is not available'''
     def __init__(self, depth: int = 0):
         if depth < 1:
             self.Fore = FakeColorama(depth+1)
-            self.Fore.YELLOW = '' # type: ignore
+            self.Fore.YELLOW = ''
             self.Style = FakeColorama(depth+1)
-            self.Style.RESET_ALL = '' # type: ignore
+            self.Style.RESET_ALL = ''
 
 try:
     import colorama # type: ignore
@@ -22,8 +26,8 @@ except ModuleNotFoundError:
     colorama = FakeColorama()
 
 _equation_counter = 0
-_input_list = []
-_equation_list = []
+_input_list: typing.List['Variable'] = []
+_equation_list: typing.List['Variable'] = []
 _output_list = []
 _name_set = set()
 
@@ -36,7 +40,9 @@ def get_and_increment_equation_counter() -> int:
     _equation_counter += 1
     return old_value
 
-class Variable(typing.List['Variable']):
+T = typing.TypeVar('T', covariant=True)
+
+class Variable(typing.Sequence['Variable']):
     '''The basis of carotte.py: netlist variables core'''
     def __init__(self, name: str, bus_size: int, autogen_name: bool = True):
         assert name not in _name_set
@@ -100,7 +106,9 @@ class Variable(typing.List['Variable']):
         return Xor(self, rhs)
     def __invert__(self) -> 'Variable':
         return Not(self)
-    def __getitem__(self, index: typing.Union[int, slice]) -> 'Variable': # type: ignore # this ignore is bad, FIXME
+    def __len__(self) -> int:
+        return self.bus_size
+    def __getitem__(self, index: typing.Union[int, slice]) -> 'Variable':
         if isinstance(index, slice):
             if (index.step is not None) and (index.step != 1):
                 raise TypeError(f"Slices must use a step of '1' (have {index.step})")
@@ -110,7 +118,7 @@ class Variable(typing.List['Variable']):
         if isinstance(index, int):
             return Select(index, self)
         raise TypeError(f"Invalid getitem, index: {index} is neither a slice or an integer")
-    def __add__(self, rhs: 'Variable') -> 'Variable': # type: ignore
+    def __add__(self, rhs: 'Variable') -> 'Variable':
         return Concat(self, rhs)
 
 class Defer:
@@ -306,7 +314,7 @@ def get_netlist() -> str:
         ""
         + "INPUT " + ", ".join(x.name for x in _input_list) + "\n"
         + "OUTPUT " + ", ".join(x.name for x in _output_list) + "\n"
-        + "VAR " + ", ".join(x.get_full_name() for x in _input_list + _equation_list) + "\n" # type: ignore
+        + "VAR " + ", ".join(x.get_full_name() for x in _input_list + _equation_list) + "\n"
         + "IN" + "\n"
         + "".join(str(x) + "\n" for x in _equation_list)
     )

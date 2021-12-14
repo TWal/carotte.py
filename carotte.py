@@ -16,16 +16,17 @@ except ModuleNotFoundError:
     print("Warning: Install module 'colored_traceback' for better tracebacks", file=sys.stderr)
 
 try:
-    assignhooks = None
+    # assignhooks = None
     import assignhooks # type: ignore
     #assignhooks.instrument.debug = True
     #assignhooks.patch.debug = True
     #assignhooks.transformer.debug = True
 
     import alt_transformer
-    assignhooks.transformer.AssignTransformer.visit_Assign = alt_transformer.visit_Assign # type: ignore
+    assignhooks.transformer.AssignTransformer.visit_Assign = alt_transformer.visit_Assign
 except ModuleNotFoundError:
     print("Warning: Install module 'assignhooks' for better variable names", file=sys.stderr)
+    assignhooks = None
 
 import lib_carotte
 
