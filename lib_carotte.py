@@ -22,8 +22,8 @@ except ModuleNotFoundError:
     colorama = FakeColorama()
 
 _equation_counter = 0
-_input_list = []
-_equation_list = []
+_input_list: typing.List['Variable'] = []
+_equation_list: typing.List['Variable'] = []
 _output_list = []
 _name_set = set()
 
@@ -36,7 +36,7 @@ def get_and_increment_equation_counter() -> int:
     _equation_counter += 1
     return old_value
 
-class Variable(typing.List['Variable']):
+class Variable(typing.Sequence['Variable']):
     '''The basis of carotte.py: netlist variables core'''
     def __init__(self, name: str, bus_size: int, autogen_name: bool = True):
         assert name not in _name_set
@@ -100,7 +100,9 @@ class Variable(typing.List['Variable']):
         return Xor(self, rhs)
     def __invert__(self) -> 'Variable':
         return Not(self)
-    def __getitem__(self, index: typing.Union[int, slice]) -> 'Variable': # type: ignore # this ignore is bad, FIXME
+    def __len__(self) -> int:
+        return self.bus_size
+    def __getitem__(self, index: typing.Union[int, slice]) -> 'Variable':
         if isinstance(index, slice):
             if (index.step is not None) and (index.step != 1):
                 raise TypeError(f"Slices must use a step of '1' (have {index.step})")
@@ -110,7 +112,7 @@ class Variable(typing.List['Variable']):
         if isinstance(index, int):
             return Select(index, self)
         raise TypeError(f"Invalid getitem, index: {index} is neither a slice or an integer")
-    def __add__(self, rhs: 'Variable') -> 'Variable': # type: ignore
+    def __add__(self, rhs: 'Variable') -> 'Variable':
         return Concat(self, rhs)
 
 class Defer:
@@ -161,7 +163,8 @@ class Constant(EquationVariable):
     def __init__(self, value: str):
         for x in value:
             if x not in "01tf":
-                raise ValueError(f"The character {x} of the constant {value} is not allowed (it should either be 0, 1, t or f)")
+                raise ValueError(f"The character {x} of the constant {value} is not allowed"
+                    + " (it should either be 0, 1, t or f)")
         super().__init__(len(value))
         self.value = value
     def __str__(self) -> str:
@@ -173,8 +176,8 @@ class Unop(EquationVariable):
     def __init__(self, x: VariableOrDefer):
         if not ALLOW_RIBBON_LOGIC_OPERATIONS and x.bus_size != 1:
             raise ValueError(f"Unops can only be performed on signals of bus size 1 (have {x.bus_size}). "
-                             + f"If your simulator handles ribbons logic operations, "
-                             + f"switch 'ALLOW_RIBBON_LOGIC_OPERATIONS' to 'True'")
+                             + "If your simulator handles ribbons logic operations, "
+                             + "switch 'ALLOW_RIBBON_LOGIC_OPERATIONS' to 'True'")
         super().__init__(x.bus_size)
         self.x = x
     def __str__(self) -> str:
@@ -198,8 +201,8 @@ class Binop(EquationVariable):
             raise ValueError("Operands have different bus sizes")
         if not ALLOW_RIBBON_LOGIC_OPERATIONS and lhs.bus_size != 1:
             raise ValueError(f"Binops can only be performed on signals of bus size 1 (have {lhs.bus_size}). "
-                             + f"If your simulator handles ribbons logic operations, "
-                             + f"switch 'ALLOW_RIBBON_LOGIC_OPERATIONS' to 'True'")
+                             + "If your simulator handles ribbons logic operations, "
+                             + "switch 'ALLOW_RIBBON_LOGIC_OPERATIONS' to 'True'")
         super().__init__(lhs.bus_size)
         self.lhs = lhs
         self.rhs = rhsB
@@ -306,7 +309,7 @@ def get_netlist() -> str:
         ""
         + "INPUT " + ", ".join(x.name for x in _input_list) + "\n"
         + "OUTPUT " + ", ".join(x.name for x in _output_list) + "\n"
-        + "VAR " + ", ".join(x.get_full_name() for x in _input_list + _equation_list) + "\n" # type: ignore
+        + "VAR " + ", ".join(x.get_full_name() for x in _input_list + _equation_list) + "\n"
         + "IN" + "\n"
         + "".join(str(x) + "\n" for x in _equation_list)
     )
