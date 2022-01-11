@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+cd "$(dirname "$0")"
 IFS=$'\n\t'
 
 for i in {0..4}_*.py; do

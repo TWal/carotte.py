@@ -16,6 +16,14 @@ Read the help!
 
     python carotte.py -h
 
+### Tutorial
+
+A tutorial is available in the 'tutorial' folder. Read the tutorial python files.
+
+### Advanced quirks
+
+carotte.py optionally supports ribbon logic operations (e.g. binary operations on values with bus size > 1).
+Call `allow_ribbon_logic_operations(True)` to enable this feature.
 
 ### License
 

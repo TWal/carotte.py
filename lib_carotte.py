@@ -26,8 +26,12 @@ _input_list: typing.List['Variable'] = []
 _equation_list: typing.List['Variable'] = []
 _output_list = []
 _name_set = set()
+_ALLOW_RIBBON_LOGIC_OPERATIONS = False
 
-ALLOW_RIBBON_LOGIC_OPERATIONS = False
+def allow_ribbon_logic_operations(enable : bool) -> None:
+    '''Enable or disable ribbon logic operations'''
+    global _ALLOW_RIBBON_LOGIC_OPERATIONS # pylint: disable=W0603
+    _ALLOW_RIBBON_LOGIC_OPERATIONS = enable
 
 def get_and_increment_equation_counter() -> int:
     '''Return the current global equation counter, and increment it'''
@@ -161,6 +165,8 @@ class EquationVariable(Variable):
 class Constant(EquationVariable):
     '''Netlist constant'''
     def __init__(self, value: str):
+        if len(value) == 0:
+            raise ValueError("Defining an empty constant is not allowed")
         for x in value:
             if x not in "01tf":
                 raise ValueError(f"The character {x} of the constant {value} is not allowed"
@@ -174,10 +180,10 @@ class Unop(EquationVariable):
     '''Netlist unary operations on variables'''
     unop_name = ""
     def __init__(self, x: VariableOrDefer):
-        if not ALLOW_RIBBON_LOGIC_OPERATIONS and x.bus_size != 1:
+        if not _ALLOW_RIBBON_LOGIC_OPERATIONS and x.bus_size != 1:
             raise ValueError(f"Unops can only be performed on signals of bus size 1 (have {x.bus_size}). "
                              + "If your simulator handles ribbons logic operations, "
-                             + "switch 'ALLOW_RIBBON_LOGIC_OPERATIONS' to 'True'")
+                             + "call `allow_ribbon_logic_operations(True)`")
         super().__init__(x.bus_size)
         self.x = x
     def __str__(self) -> str:
@@ -198,11 +204,11 @@ class Binop(EquationVariable):
     binop_name = ""
     def __init__(self, lhs: VariableOrDefer, rhsB: VariableOrDefer):
         if lhs.bus_size != rhsB.bus_size:
-            raise ValueError("Operands have different bus sizes")
-        if not ALLOW_RIBBON_LOGIC_OPERATIONS and lhs.bus_size != 1:
+            raise ValueError(f"Operands have different bus sizes: {lhs.bus_size} and {rhsB.bus_size}")
+        if not _ALLOW_RIBBON_LOGIC_OPERATIONS and lhs.bus_size != 1:
             raise ValueError(f"Binops can only be performed on signals of bus size 1 (have {lhs.bus_size}). "
                              + "If your simulator handles ribbons logic operations, "
-                             + "switch 'ALLOW_RIBBON_LOGIC_OPERATIONS' to 'True'")
+                             + "call `allow_ribbon_logic_operations(True)`")
         super().__init__(lhs.bus_size)
         self.lhs = lhs
         self.rhs = rhsB
@@ -227,8 +233,10 @@ class Xor(Binop):
 class Mux(EquationVariable):
     '''Netlist MUX'''
     def __init__(self, choice: VariableOrDefer, a: VariableOrDefer, b: VariableOrDefer):
-        assert choice.bus_size == 1
-        assert a.bus_size == b.bus_size
+        if choice.bus_size != 1:
+            raise ValueError(f"MUX choice bus size must be 1, have {choice.bus_size}")
+        if a.bus_size != b.bus_size:
+            raise ValueError(f"MUX sides must have the same bus size, have {a.bus_size} and {b.bus_size}")
         self.choice = choice
         self.a = a
         self.b = b
@@ -239,7 +247,9 @@ class Mux(EquationVariable):
 class ROM(EquationVariable):
     '''Netlist ROM'''
     def __init__(self, addr_size: int, word_size: int, read_addr: VariableOrDefer):
-        assert read_addr.bus_size == addr_size
+        if read_addr.bus_size != addr_size:
+            raise ValueError(f"ROM read address bus size ({read_addr.bus_size}) must be equal "
+                + "to addr_size ({addr_size})")
         self.addr_size = addr_size
         self.word_size = word_size
         self.read_addr = read_addr
@@ -251,10 +261,17 @@ class RAM(EquationVariable):
     '''Netlist RAM'''
     def __init__(self, addr_size: int, word_size: int, read_addr: VariableOrDefer,
                  write_enable: VariableOrDefer, write_addr: VariableOrDefer, write_data: VariableOrDefer):
-        assert read_addr.bus_size == addr_size
-        assert write_enable.bus_size == 1
-        assert write_addr.bus_size == addr_size
-        assert write_data.bus_size == word_size
+        if read_addr.bus_size != addr_size:
+            raise ValueError(f"RAM read address bus size ({read_addr.bus_size}) must be equal "
+                + "to addr_size ({addr_size})")
+        if write_enable.bus_size != 1:
+            raise ValueError(f"RAM write_enable bus size must be equal to 1, have {write_enable.bus_size}")
+        if write_addr.bus_size != addr_size:
+            raise ValueError(f"RAM write address bus size ({write_addr.bus_size}) must be equal "
+                + "to addr_size ({addr_size})")
+        if write_data.bus_size != word_size:
+            raise ValueError(f"RAM write data bus size ({write_data.bus_size}) must be equal "
+                + "to word_size ({word_size})")
         self.addr_size = addr_size
         self.word_size = word_size
         self.read_addr = read_addr

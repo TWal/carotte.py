@@ -5,7 +5,8 @@
 '''Entry point of the carotte.py DSL'''
 
 import argparse
-import importlib
+import importlib.abc
+import importlib.util
 import re
 import sys
 
@@ -29,11 +30,22 @@ except ModuleNotFoundError:
 
 import lib_carotte
 
-def process(module_name: str, output_filename: str = None) -> None:
+MIN_PYTHON = (3, 8)
+if sys.version_info < MIN_PYTHON:
+    print("Python %s.%s or later is required" % MIN_PYTHON, file=sys.stderr)
+    sys.exit(1)
+
+def process(module_file: str, output_filename: str = None) -> None:
     '''Process a carotte.py input python file and build its netlist'''
-    module_name = module_name.replace("/", ".")
+    module_name = module_file.replace("/", ".")
     module_name = re.sub("\\.py$", "", module_name)
-    module = importlib.import_module(module_name)
+    spec = importlib.util.spec_from_file_location(module_name, module_file)
+    if spec is None:
+        print(f"Could not load file '{module_file}'", file=sys.stderr)
+        sys.exit(1)
+    assert isinstance(spec.loader, importlib.abc.Loader)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
     lib_carotte.reset()
     if assignhooks is not None:
         assignhooks.patch_module(module)
@@ -50,10 +62,10 @@ def process(module_name: str, output_filename: str = None) -> None:
 def main() -> None:
     '''Entry point for carotte.py'''
     parser = argparse.ArgumentParser(description='carotte.py DSL')
-    parser.add_argument("module_name", nargs=1)
+    parser.add_argument("module_file", nargs=1)
     parser.add_argument('-o', '--output-file', help='Netlist output file')
     args = parser.parse_args()
-    process(args.module_name[0], args.output_file)
+    process(args.module_file[0], args.output_file)
 
 if __name__ == "__main__":
     main()
