@@ -26,6 +26,7 @@ _input_list: typing.List['Variable'] = []
 _equation_list: typing.List['Variable'] = []
 _output_list = []
 _name_set = set()
+_defered_set = set()
 _ALLOW_RIBBON_LOGIC_OPERATIONS = False
 
 def allow_ribbon_logic_operations(enable : bool) -> None:
@@ -82,13 +83,13 @@ class Variable(typing.Sequence['Variable']):
 
     def __assignpre__(self, lhs_name: str, rhs_name: str, rhs: typing.Any) -> typing.Any: # pylint: disable=R0201
         '''Magic hook for better variables names'''
-        if False: # pylint: disable=W0125
+        if True: # pylint: disable=W0125
             print(f'{colorama.Fore.YELLOW}PRE: assigning {lhs_name} = {rhs_name}  ||| var: {rhs.get_full_name()}')
         return rhs
 
     def __assignpost__(self, lhs_name: str, rhs_name: str) -> None:
         '''Magic hook for better variables names'''
-        if False: # pylint: disable=W0125
+        if True: # pylint: disable=W0125
             print(f'POST: assigning {lhs_name} = {rhs_name}  ||| var{self.autogen_name}: {self.get_full_name()}')
         if self.autogen_name and (lhs_name is not None):
             new_name = lhs_name
@@ -125,9 +126,11 @@ class Defer:
         self.val: typing.Optional[Variable] = None
         self.lazy_val = lazy_val
         self.bus_size = bus_size
+        _defered_set.add(self)
     def get_val(self) -> Variable:
         '''Helper to resolve the variable value once the loop issue has been solved'''
         if self.val is None:
+            _defered_set.remove(self)
             self.val = self.lazy_val()
             assert self.val.bus_size == self.bus_size
         return self.val
@@ -322,6 +325,8 @@ class Select(EquationVariable):
 
 def get_netlist() -> str:
     '''Get the netlist in string form'''
+    for defered in _defered_set.copy():
+        defered.get_val()
     netlist = (
         ""
         + "INPUT " + ", ".join(x.name for x in _input_list) + "\n"
@@ -340,3 +345,4 @@ def reset() -> None:
     _equation_list = []
     _output_list = []
     _name_set = set()
+    _defered_set = set()
