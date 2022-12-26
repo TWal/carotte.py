@@ -24,6 +24,7 @@ try:
     #assignhooks.transformer.debug = True
     import alt_transformer
     assignhooks.transformer.AssignTransformer.visit_Assign = alt_transformer.visit_Assign
+    import alt_instrument
 except ModuleNotFoundError:
     print("Warning: Install module 'assignhooks' for better variable names", file=sys.stderr)
     assignhooks = None
@@ -40,13 +41,18 @@ def process(module_file: str, output_filename: str = None) -> None:
     '''Process a carotte.py input python file and build its netlist'''
     module_dir, module_name = os.path.split(os.path.abspath(module_file))
     sys.path.append(module_dir)
+    if assignhooks is not None:
+        alt_instrument.path.append(module_dir)
     module_name = re.sub("\\.py$", "", module_name)
+    if assignhooks is not None:
+        alt_instrument.start()
     try:
         module = __import__(module_name)
     except ModuleNotFoundError:
         print(f"Could not load file '{module_file}'", file=sys.stderr)
         sys.exit(1)
     if assignhooks is not None:
+        alt_instrument.stop()
         assignhooks.patch_module(module)
     lib_carotte.reset()
     module.main() # type: ignore
