@@ -37,12 +37,15 @@ if sys.version_info < MIN_PYTHON:
     sys.exit(1)
 
 
-def process(module_file: str, output_filename: str = None) -> None:
+def process(module_file: str, output_filename: str = None, assignhooks_path: str = None) -> None:
     '''Process a carotte.py input python file and build its netlist'''
     module_dir, module_name = os.path.split(os.path.abspath(module_file))
     sys.path.append(module_dir)
     if assignhooks is not None:
-        alt_instrument.path.append(module_dir)
+        if assignhooks_path is None:
+            alt_instrument.path.append(module_dir)
+        else:
+            alt_instrument.path = [ os.path.abspath(i) for i in assignhooks_path.split(':')]
     module_name = re.sub("\\.py$", "", module_name)
     if assignhooks is not None:
         alt_instrument.start()
@@ -53,7 +56,6 @@ def process(module_file: str, output_filename: str = None) -> None:
         sys.exit(1)
     if assignhooks is not None:
         alt_instrument.stop()
-        assignhooks.patch_module(module)
     lib_carotte.reset()
     module.main() # type: ignore
 
@@ -69,8 +71,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='carotte.py DSL')
     parser.add_argument("module_file", nargs=1)
     parser.add_argument('-o', '--output-file', help='Netlist output file')
+    parser.add_argument('-p', '--assignhooks-path', help='Python files from these folder will have nice variable names if `assignhooks` is present. Takes a colon separated list of paths')
     args = parser.parse_args()
-    process(args.module_file[0], args.output_file)
+    process(args.module_file[0], args.output_file, args.assignhooks_path)
 
 if __name__ == "__main__":
     main()
