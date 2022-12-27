@@ -37,16 +37,21 @@ if sys.version_info < MIN_PYTHON:
     sys.exit(1)
 
 
-def process(module_file: str, output_filename: str = None, assignhooks_path: str = None) -> None:
+def process(module_file: str, output_filename: str = None, assignhooks_path: str = None, module_name: str = None, python_path: str = None) -> None:
     '''Process a carotte.py input python file and build its netlist'''
-    module_dir, module_name = os.path.split(os.path.abspath(module_file))
-    sys.path.append(module_dir)
+    module_dir, filename = os.path.split(os.path.abspath(module_file))
+    if python_path is None:
+        sys.path.append(module_dir)
+    else:
+        for i in python_path.split(':'):
+            sys.path.append(os.path.abspath(i))
     if assignhooks is not None:
         if assignhooks_path is None:
             alt_instrument.path.append(module_dir)
         else:
             alt_instrument.path = [ os.path.abspath(i) for i in assignhooks_path.split(':')]
-    module_name = re.sub("\\.py$", "", module_name)
+    if module_name is None:
+        module_name = re.sub("\\.py$", "", filename)
     if assignhooks is not None:
         alt_instrument.start()
     try:
@@ -72,8 +77,10 @@ def main() -> None:
     parser.add_argument("module_file", nargs=1)
     parser.add_argument('-o', '--output-file', help='Netlist output file')
     parser.add_argument('-p', '--assignhooks-path', help='Python files from these folder will have nice variable names if `assignhooks` is present. Takes a colon separated list of paths')
+    parser.add_argument('-m', '--module-name', help="Carotte.py module entrypoint. Usually, you don't have to specify it unless you specify --python-path option. Default: module_file filename without `.py`")
+    parser.add_argument('-y', '--python-path', help="Additionnal paths python will look to while importing modules (the entrypoint is a module). Default: directory containing module_file")
     args = parser.parse_args()
-    process(args.module_file[0], args.output_file, args.assignhooks_path)
+    process(args.module_file[0], args.output_file, args.assignhooks_path, args.module_name, args.python_path)
 
 if __name__ == "__main__":
     main()
