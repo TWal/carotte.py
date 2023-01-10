@@ -1,0 +1,6 @@
+INPUT 
+OUTPUT 
+VAR reg0, _reg0_sel_0
+IN
+reg0 = REG _reg0_sel_0
+_reg0_sel_0 = SELECT 0 reg0

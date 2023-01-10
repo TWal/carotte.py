@@ -26,6 +26,7 @@ _input_list: typing.List['Variable'] = []
 _equation_list: typing.List['Variable'] = []
 _output_list = []
 _name_set = set()
+_unevaluated_defer_set = set()
 _ALLOW_RIBBON_LOGIC_OPERATIONS = False
 
 def allow_ribbon_logic_operations(enable : bool) -> None:
@@ -125,9 +126,11 @@ class Defer:
         self.val: typing.Optional[Variable] = None
         self.lazy_val = lazy_val
         self.bus_size = bus_size
+        _unevaluated_defer_set.add(self)
     def get_val(self) -> Variable:
         '''Helper to resolve the variable value once the loop issue has been solved'''
         if self.val is None:
+            _unevaluated_defer_set.remove(self)
             self.val = self.lazy_val()
             assert self.val.bus_size == self.bus_size
         return self.val
@@ -322,6 +325,17 @@ class Select(EquationVariable):
 
 def get_netlist() -> str:
     '''Get the netlist in string form'''
+
+    # The equations might contain Defer nodes that are not yet evaluated,
+    # and their evaluation could create new equations.
+    # This loop evaluates all Defer nodes (and subsequent Defer nodes that could
+    # be created by the evaluation of the previous ones)
+    while len(_unevaluated_defer_set) != 0:
+        for defer in list(_unevaluated_defer_set):
+            defer.get_val()
+
+    old_lens = (len(_input_list), len(_output_list), len(_equation_list))
+
     netlist = (
         ""
         + "INPUT " + ", ".join(x.name for x in _input_list) + "\n"
@@ -330,6 +344,12 @@ def get_netlist() -> str:
         + "IN" + "\n"
         + "".join(str(x) + "\n" for x in _equation_list)
     )
+
+    # Sanity check
+    new_lens = (len(_input_list), len(_output_list), len(_equation_list))
+    if new_lens != old_lens:
+        raise RuntimeError("Internal error: inconsistent lengths, please report a bug")
+
     return netlist
 
 def reset() -> None:
