@@ -134,10 +134,14 @@ class Defer:
             self.val = self.lazy_val()
             assert self.val.bus_size == self.bus_size
         return self.val
-    def __getattr__(self, name: str) -> str:
-        if name != 'name':
-            raise AttributeError
-        return self.get_val().name
+    def __getattr__(self, attr: str) -> str:
+        if attr == 'name':
+            return self.get_val().name
+        if attr == 'bus_size':
+            return self.bus_size
+        if attr == 'autogen_name':
+            return True
+        raise AttributeError
 
 VariableOrDefer = typing.Union[Variable, Defer]
 
