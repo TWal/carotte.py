@@ -4,6 +4,7 @@
 '''Simple clock divider example'''
 from lib_carotte import *
 
+
 def main() -> None:
     '''Entry point of this example'''
     o = Reg(Defer(1, lambda: c))

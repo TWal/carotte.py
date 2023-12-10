@@ -4,10 +4,12 @@
 '''Simple n-adder example'''
 
 import functools
-from lib_carotte import *
-from examples import fulladder
 
-def adder(a: Variable, b: Variable, c_in: Variable, i: int = None) -> typing.Tuple[Variable, Variable]:
+from examples import fulladder
+from lib_carotte import *
+
+
+def adder(a: Variable, b: Variable, c_in: Variable, i: int | None = None) -> typing.Tuple[Variable, Variable]:
     '''n-bit full-adder implementation'''
     assert a.bus_size == b.bus_size
     if i is None:

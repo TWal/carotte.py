@@ -5,6 +5,7 @@
 
 from lib_carotte import *
 
+
 def main() -> None:
     '''Entry point of this example'''
     x = Input(1)

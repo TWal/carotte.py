@@ -5,7 +5,9 @@
 
 import functools
 import typing
+
 from lib_carotte import *
+
 
 def or_n(a: Variable, b: Variable) -> Variable:
     '''n-bit logical OR implementation'''

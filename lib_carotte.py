@@ -6,6 +6,7 @@
 import sys
 import typing
 
+
 class FakeColorama:
     '''We define here empty variables for when the colorama package is not available'''
     def __init__(self, depth: int = 0):
@@ -16,10 +17,10 @@ class FakeColorama:
             self.Style.RESET_ALL = '' # type: ignore
 
 try:
-    import colorama # type: ignore
+    import colorama  # type: ignore
 except ModuleNotFoundError:
     print("Warning: Install module 'colorama' for colored errors", file=sys.stderr)
-    colorama = FakeColorama()
+    colorama = FakeColorama() # type: ignore
 
 _equation_counter = 0
 _input_list: typing.List['Variable'] = []
@@ -50,7 +51,7 @@ class Variable(typing.Sequence['Variable']):
         self.name = name
         self.autogen_name = autogen_name
         self.bus_size = bus_size
-    def set_as_output(self, name: str = None) -> None:
+    def set_as_output(self, name: typing.Optional[str] = None) -> None:
         '''Sets this variable as a netlist OUTPUT'''
         if name is not None:
             self.rename(name)
@@ -81,7 +82,7 @@ class Variable(typing.Sequence['Variable']):
             return False
         return True
 
-    def __assignpre__(self, lhs_name: str, rhs_name: str, rhs: typing.Any) -> typing.Any: # pylint: disable=R0201
+    def __assignpre__(self, lhs_name: str, rhs_name: str, rhs: typing.Any) -> typing.Any:
         '''Magic hook for better variables names'''
         if False: # pylint: disable=W0125
             print(f'{colorama.Fore.YELLOW}PRE: assigning {lhs_name} = {rhs_name}  ||| var: {rhs.get_full_name()}')
@@ -147,7 +148,7 @@ VariableOrDefer = typing.Union[Variable, Defer]
 
 class Input(Variable):
     '''A netlist variable of type INPUT'''
-    def __init__(self, bus_size: int, name: str = None):
+    def __init__(self, bus_size: int, name: typing.Optional[str] = None):
         autogen_name = False
         if name is None:
             name = "_input_" + str(get_and_increment_equation_counter())

@@ -5,7 +5,8 @@
 
 import ast
 
-import assignhooks # type: ignore
+import assignhooks  # type: ignore
+
 
 def gen_assign_checker_ast(node): # type: ignore
     '''assignhooks patch to handle more cases'''

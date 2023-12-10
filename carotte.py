@@ -10,17 +10,17 @@ import re
 import sys
 
 try:
-    import colored_traceback # type: ignore
+    import colored_traceback  # type: ignore
     colored_traceback.add_hook(always=True)
 except ModuleNotFoundError:
     print("Warning: Install module 'colored_traceback' for better tracebacks", file=sys.stderr)
 
 try:
-    import assignhooks # type: ignore
+    import assignhooks  # type: ignore
+
     #assignhooks.instrument.debug = True
     #assignhooks.patch.debug = True
     #assignhooks.transformer.debug = True
-
     import alt_transformer
     assignhooks.transformer.AssignTransformer.visit_Assign = alt_transformer.visit_Assign
 except ModuleNotFoundError:
@@ -31,10 +31,10 @@ import lib_carotte
 
 MIN_PYTHON = (3, 8)
 if sys.version_info < MIN_PYTHON:
-    print("Python %s.%s or later is required" % MIN_PYTHON, file=sys.stderr)
+    print("Python %s.%s or later is required" % MIN_PYTHON, file=sys.stderr) # pylint: disable=C0209
     sys.exit(1)
 
-def process(module_file: str, output_filename: str = None) -> None:
+def process(module_file: str, output_filename: str | None = None) -> None:
     '''Process a carotte.py input python file and build its netlist'''
     module_dir, module_name = os.path.split(os.path.abspath(module_file))
     sys.path.append(module_dir)
@@ -53,7 +53,7 @@ def process(module_file: str, output_filename: str = None) -> None:
     if output_filename is None:
         print(netlist, end='')
     else:
-        with open(output_filename, 'w') as f:
+        with open(output_filename, 'w', encoding='utf-8') as f:
             f.write(netlist)
 
 def main() -> None:

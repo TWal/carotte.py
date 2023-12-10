@@ -5,6 +5,7 @@
 
 from lib_carotte import *
 
+
 def full_adder(a: Variable, b: Variable, c: Variable) -> typing.Tuple[Variable, Variable]:
     '''1-bit full adder implementation'''
     tmp = a ^ b
