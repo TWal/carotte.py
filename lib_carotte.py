@@ -127,6 +127,7 @@ class Defer:
         self.val: typing.Optional[Variable] = None
         self.lazy_val = lazy_val
         self.bus_size = bus_size
+        self.autogen_name = True
         _unevaluated_defer_set.add(self)
     def get_val(self) -> Variable:
         '''Helper to resolve the variable value once the loop issue has been solved'''
@@ -135,14 +136,10 @@ class Defer:
             self.val = self.lazy_val()
             assert self.val.bus_size == self.bus_size
         return self.val
-    def __getattr__(self, attr: str) -> str:
-        if attr == 'name':
-            return self.get_val().name
-        if attr == 'bus_size':
-            return self.bus_size
-        if attr == 'autogen_name':
-            return True
-        raise AttributeError
+    @property
+    def name(self) -> str:
+        '''We want to compute the variable name lazily'''
+        return self.get_val().name
 
 VariableOrDefer = typing.Union[Variable, Defer]
 

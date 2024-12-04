@@ -10,8 +10,9 @@ import re
 import sys
 
 try:
-    import colored_traceback  # type: ignore
-    colored_traceback.add_hook(always=True)
+    if sys.version_info < (3, 13):
+        import colored_traceback  # type: ignore
+        colored_traceback.add_hook(always=True)
 except ModuleNotFoundError:
     print("Warning: Install module 'colored_traceback' for better tracebacks", file=sys.stderr)
 
